@@ -223,11 +223,6 @@ def plot_my_leave(leaf_id, c, ymax_all=None, xmax_all=None):
   c.Print("plots/output.pdf")
 
 
-def makeROC(sig, bkg):
-  # Check if normalised
-  pass
-
-  
 class ROC(object):
   def __init__(self, sig, bkg):
     self.sig = sig
@@ -254,6 +249,21 @@ class ROC(object):
     self.roc_curve = (xx, yy)
     return self.roc_curve
 
+
+class IsolationAnalyser(object):
+  """ Analyse isolation variables:
+      - Assumption: Various decay-modes (seperate TFiles -> TTrees)
+                    Various isolation variables (TLeaves)
+      - Objective: to find best isolation variables
+      - Do:
+        *) Draw plain histograms
+        *) Merge them to obtain one hist for signal and one for background
+        *) Make ROC curves for all isolation variables and show them on
+           one plot
+  """
+  
+  def __init__(self):
+    self.h = None
 ######################################################################
 # MAIN
 ######################################################################
