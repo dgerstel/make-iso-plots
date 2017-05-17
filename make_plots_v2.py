@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Work from home?
-WFH = False
+WFH = True #False
 
 # Get all ntuples to be plotted
 if WFH: path = "/media/sdb1/HEP_DATA/IsoVars/"
@@ -75,6 +75,8 @@ colours['Bd_Dststmunu,3pipi0']       = kOrange
 colours['Bs_Dsmunu,TauNu']           = kBlue
 colours['Bs_Ds3pi,munu']             = kBlack
 
+palette = [1,2,3,4,5,6,7,8,12,27,20,38,9]
+#palette = [kBlack, kRed, kBlue, kOrange, kViolet]
 
 # Allocate TFiles and TTrees
 files = {}
@@ -107,10 +109,19 @@ iso_leaves = [name for name in leaves if "so" in name or "Dawid" in name]
 ###
 important_old_leaves = [#'B_SmallestDeltaChi2OneTrack'
                         #,'B_CDFIso_NEW'
-                        #'Mu_isolation_Giampi_nopi'
+                        #,'Mu_isolation_Giampi_nopi'
                         'Mu_BDTiso3'
                         #,'Tau2Pi_SmallestDeltaChi2OneTrack'
-                        ]#'Tau2Pi_BDTiso3']
+                        ]#,'Tau2Pi_BDTiso3']
+
+# Ranges of hists
+leaves_ranges = {'B_SmallestDeltaChi2OneTrack'      : (None, 8000),
+                 'B_CDFIso_NEW'                     : (None, None),
+                 'Mu_isolation_Giampi_nopi'         : (None, None),
+                 'Mu_BDTiso3'                       : (None, 0.1),
+                 'Tau2Pi_SmallestDeltaChi2OneTrack' : (None, 12000),
+                 'Tau2Pi_BDTiso3'                   : (None, None)}
+
 
 # roughly best cppm's variables
 #nominal = ['Tau2Pi_BDTiso3']
@@ -129,15 +140,23 @@ print "** SAME VAR LEAVES: ", same_var_l
 min_bdtg_per_evt =["min(min(" + ",".join(svl[:2]) + "),min(" + \
     ",".join(svl[2:4]) + "))" for svl in same_var_l]
 
+for el in min_bdtg_per_evt:
+    leaves_ranges[el] = (None, None)
+
 # "New" variables so that we have all Joan's ones (as in his NOTE)
 sumPi_BDTiso3 = '+'.join(["Tau2Pi_Pi%d_BDTiso3"%(id) for id in [1,2,3]])
 sumPi_BDTiso1_1 = '+'.join(["Tau2Pi_Pi%d_BDTiso1-int(Tau2Pi_Pi%d_BDTiso1/100)*100"%(id,id) for id in [1,2,3]])
 decoded = ["%s_BDTiso1-int(%s_BDTiso1/100)*100"%(part,part) for part in ["Tau2Pi", "Mu"]]
 new = [sumPi_BDTiso3, sumPi_BDTiso1_1] + decoded
+
+for el in new:
+    leaves_ranges[el] = (None, None)
+
+print "*** RANGES OF LEAVES: ", leaves_ranges
 ######################################################################
 # CONTROLS
 ######################################################################
-leaves_subset = important_old_leaves + min_bdtg_per_evt #+ new #not_my_leaves[:2] #min_bdtg_per_evt
+leaves_subset = min_bdtg_per_evt + important_old_leaves #+ new #not_my_leaves[:2] #min_bdtg_per_evt
 #leaves_subset = [leaves_subset[i] for i in [0,1,2,8]]
 
 if WFH: OUTDIR = "./plots/"
@@ -219,7 +238,7 @@ class IsolationAnalyser(object):
         *) Make ROC curves for all isolation variables and show them on
            one plot
   """
-  
+
   def __init__(self):
     self.hists = [[] for m in mode_list]
     self.canvases = []
@@ -235,8 +254,8 @@ class IsolationAnalyser(object):
     self.make_ROCs()
 
   def make_raw_hists(self):
-    xmax_l = [None, None, 8000., None, None, 0.1, 12000., None, None, None,
-              None, None, None]
+    # xmax_l = [None, None, 8000., None, None, 0.1, 12000., None, None, None,
+    #           None, None, None]
     # 30000, 1.5,
     # Open canvas and output file
     C = TCanvas()
@@ -245,7 +264,7 @@ class IsolationAnalyser(object):
     self.canvases = [TCanvas() for l in leaves_subset]
 
     for i,l in enumerate(leaves_subset):
-      self.plot_my_leave(leaf_id=i, ymax_all=None, xmax_all=xmax_l[i])
+      self.plot_my_leave(leaf_id=i, ymax_all=None, xmax_all=leaves_ranges[l][1])
 
     # Close the output file
     C.Print("plots/output.root]")
@@ -276,7 +295,7 @@ class IsolationAnalyser(object):
       bin_centre = h_list[0].GetBinCenter(i)
       res.Fill(bin_centre, sum(h.GetBinContent(i) for h in h_list))
     return res
-      
+
   def normalise(self, h):
     """ Including under/over flow """
     print "*** Before normalise, under/over -flow: ", h.GetBinContent(0), \
@@ -321,26 +340,26 @@ class IsolationAnalyser(object):
     for sig,bkg in zip(self.sig_merged, self.bkg_merged):
       roc = ROC(sig, bkg)
       self.roc_curves.append(roc())
-    
+
     # Draw them
     self.cnv = TCanvas()
     self.mg = TMultiGraph("mg", \
               "Receiver Operator Curves;Signal efficiency;Background rejection")
     for i,rc in enumerate(self.roc_curves):
-      rc.SetLineColor(i+1)
+      rc.SetLineColor(palette[i])
       if i == 9:
         rc.SetMarkerColor(i+5)
       else:
-        rc.SetMarkerColor(i+1)
+        rc.SetMarkerColor(palette[i])
       rc.SetMarkerStyle(20)
       rc.SetName(leaves_subset[i])
       rc.SetTitle(leaves_subset[i])
       self.mg.Add(rc)
     self.mg.Draw("APL")
-    self.cnv.BuildLegend(0.12, 0.12, 0.4, 0.5, "", "LP")
+    #self.cnv.BuildLegend(0.12, 0.12, 0.4, 0.5, "", "LP")
     self.cnv.Update()
     self.cnv.Print("plots/roc.pdf")
-      
+
   def plot_my_leave(self, leaf_id, ymax_all=None, xmax_all=None):
     self.canvases[leaf_id].Divide(6, 3)
     bdtg_label = []
@@ -363,8 +382,8 @@ class IsolationAnalyser(object):
       if xmax > xmax_g: xmax_g = xmax
 
       print "xmax_all = ", xmax_all
-      print "xmax_g = ", xmax_g
 
+    print "Leaf%d: xmin_g, xmax_g = %f, %f"%(leaf_id, xmin_g, xmax_g)
     # Draw the leaves into the histograms
     # Their same binning and ranges help in making the ROC curve
     for mode_id, mode in enumerate(mode_list):
@@ -372,9 +391,9 @@ class IsolationAnalyser(object):
       # Define histogram
       label = mode+str(leaf_id)#leaves_subset[leaf_id]
       if xmax_all is not None:
-        self.hists[mode_id].append(TH1F(label, leaves_subset[leaf_id], 100, -1.0, xmax_all))
+        self.hists[mode_id].append(TH1F(label, leaves_subset[leaf_id], 1000, -1.0, xmax_all))
       else:
-        self.hists[mode_id].append(TH1F(label, leaves_subset[leaf_id], 100, xmin_g, xmax_g))
+        self.hists[mode_id].append(TH1F(label, leaves_subset[leaf_id], 1000, xmin_g, xmax_g))
       if ymax_all is not None:
         self.hists[mode_id].SetMaximum(ymax_all)
 
@@ -404,7 +423,3 @@ class IsolationAnalyser(object):
 ######################################################################
 isoAn = IsolationAnalyser()
 isoAn()
-
-
-
-
