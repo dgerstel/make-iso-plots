@@ -1,5 +1,5 @@
 from ROOT import TFile, TCanvas, TGraph, TMultiGraph
-from ROOT import gStyle, gDirectory
+from ROOT import gStyle, gPad, gDirectory
 from ROOT import TH1F, TLegend, TPad, TColor
 from ROOT import kBlue, kRed, kOrange, kYellow, kGreen, kMagenta,\
                  kCyan, kAzure, kGray, kBlack, kViolet
@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Work from home?
-WFH = True #False
+WFH = False
 
 # Get all ntuples to be plotted
 if WFH: path = "/media/sdb1/HEP_DATA/IsoVars/"
@@ -28,7 +28,7 @@ root_file = "DVNtuple.root"
 
 # Group modes to categories; may be convenient, even if flat list of all modes
 # will be used.
-modes = [('sig', ['Bs_mutau,pipipinu' , 'Bd_mutau,pipipinu']),
+modes = [#('sig', ['Bs_mutau,pipipinu' , 'Bd_mutau,pipipinu']),
          ('D(mu)3pi', ['Bd_Dst-3pi,munu', 'Bd_D-3pi,munu', 'Bd_D-3pi,Kmunu',
                        'Bd_Dst-3pipi0,munu', 'Bs_Ds3pi,munu']),
          ('D(3pi)mu', ['Bd_Dst-munu,3pipi0', 'Bd_D-munu,3pipi0',
@@ -45,6 +45,11 @@ modes = collections.OrderedDict(modes)
 # Get a flat list of all modes
 flatten = lambda l: [item for sublist in l for item in sublist]
 mode_list = [m for m in flatten(modes.values())]
+
+# Add new signal modes from Julien:
+mode_list += ["%s_mutau,pipipinu_tauola_babar_%s"%(part, vintage) for part in ['Bd', 'Bs'] for vintage in ['2011', '2012', '2011-12']]
+print "MODES: ", mode_list
+
 
 # Get all ROOT file; each mode corresponds to directory with ROOT file
 fnames = [join(path, direc, root_file) for direc in mode_list]
@@ -107,21 +112,20 @@ iso_leaves = [name for name in leaves if "so" in name or "Dawid" in name]
 # # '%s_BDTiso3') [is Tau2Pi_Pi1_BDTiso3 + Tau2Pi_Pi2_BDTiso3 + Tau2Pi_Pi3_BD'%s_BDTiso1_1')
 
 ###
-important_old_leaves = [#'B_SmallestDeltaChi2OneTrack'
-                        #,'B_CDFIso_NEW'
-                        #,'Mu_isolation_Giampi_nopi'
-                        'Mu_BDTiso3'
-                        #,'Tau2Pi_SmallestDeltaChi2OneTrack'
-                        ]#,'Tau2Pi_BDTiso3']
+important_old_leaves = ['B_SmallestDeltaChi2OneTrack'
+                        ,'B_CDFIso_NEW'
+                        ,'Mu_isolation_Giampi_nopi'
+                        ,'Mu_BDTiso3'
+                        ,'Tau2Pi_SmallestDeltaChi2OneTrack'
+                        ,'Tau2Pi_BDTiso3']
 
 # Ranges of hists
-leaves_ranges = {'B_SmallestDeltaChi2OneTrack'      : (None, 8000),
+leaves_ranges = {'B_SmallestDeltaChi2OneTrack'      : (None, 3000), # there are events in range 3000-8000
                  'B_CDFIso_NEW'                     : (None, None),
                  'Mu_isolation_Giampi_nopi'         : (None, None),
-                 'Mu_BDTiso3'                       : (None, 0.1),
-                 'Tau2Pi_SmallestDeltaChi2OneTrack' : (None, 12000),
-                 'Tau2Pi_BDTiso3'                   : (None, None)}
-
+                 'Mu_BDTiso3'                       : (-1.0, 0.01),
+                 'Tau2Pi_SmallestDeltaChi2OneTrack' : (None, 1500),
+                 'Tau2Pi_BDTiso3'                   : (-1.5, 0.01)}
 
 # roughly best cppm's variables
 #nominal = ['Tau2Pi_BDTiso3']
@@ -153,15 +157,25 @@ for el in new:
     leaves_ranges[el] = (None, None)
 
 print "*** RANGES OF LEAVES: ", leaves_ranges
+
+# Aliases to leaves, so that legend display is shorter
+leaves_alias = {sumPi_BDTiso3 : 'sumPi_BDTiso3',
+                sumPi_BDTiso1_1 : 'sumPi_BDTiso1_1',
+                decoded[0] : 'Tau2Pi_BDTiso1_1',
+                decoded[1] : 'Mu_BDTiso1_1',
+                min_bdtg_per_evt[0] : 'BDT_Dawid_1',
+                min_bdtg_per_evt[1] : 'BDT_Dawid_3'}
+
 ######################################################################
 # CONTROLS
 ######################################################################
-leaves_subset = min_bdtg_per_evt + important_old_leaves #+ new #not_my_leaves[:2] #min_bdtg_per_evt
+leaves_subset = min_bdtg_per_evt + important_old_leaves + new #not_my_leaves[:2] #min_bdtg_per_evt
 #leaves_subset = [leaves_subset[i] for i in [0,1,2,8]]
 
 if WFH: OUTDIR = "./plots/"
 else: OUTDIR = "/lhcb/users/gerstel/LHCb_Analysis/DaVinciDev_v37r2p4/plots/"
 OUTFILE = OUTDIR + "old_iso_vars.pdf"
+
 
 ######################################################################
 # Allocate histograms
@@ -344,7 +358,7 @@ class IsolationAnalyser(object):
     # Draw them
     self.cnv = TCanvas()
     self.mg = TMultiGraph("mg", \
-              "Receiver Operator Curves;Signal efficiency;Background rejection")
+              ";Signal efficiency;Background rejection")
     for i,rc in enumerate(self.roc_curves):
       rc.SetLineColor(palette[i])
       if i == 9:
@@ -353,10 +367,37 @@ class IsolationAnalyser(object):
         rc.SetMarkerColor(palette[i])
       rc.SetMarkerStyle(20)
       rc.SetName(leaves_subset[i])
-      rc.SetTitle(leaves_subset[i])
+      # if i == 0 or i == 1:
+      #   rc.SetTitle("myBDT%d"%(i+1))
+      # elif i == 2:
+      #   rc.SetTitle("nominal")
+      # else:
+      #   rc.SetTitle(leaves_subset[i])
+      if leaves_subset[i] in leaves_alias.keys():
+        rc.SetTitle(leaves_alias[leaves_subset[i]])
+      else:  
+        rc.SetTitle(leaves_subset[i])
       self.mg.Add(rc)
+    self.mg.GetXaxis()#.SetTitleSize(10)
+    self.mg.GetYaxis()#.SetTitleSize(10)
+    gStyle.SetLegendBorderSize(0)
+    gStyle.SetLegendTextSize(0.04)
+    gStyle.SetLabelSize(.05, "XY")
+    gStyle.SetTitleFontSize(.08)
+    gStyle.SetTitleFont(72, "XY")
+    gStyle.SetTitleXSize(0.07)
+    gStyle.SetTitleYSize(0.07)
+    gStyle.SetTitleXOffset(0.75)
+    gStyle.SetTitleYOffset(0.7)
+    gStyle.SetFrameBorderSize(5)
+
+    gPad.SetLeftMargin(0.11)
+    #gPad.SetRightMargin(0.1)
+    gPad.SetBottomMargin(.119)
+    #gPad.SetTopMargin(0.1)
+
     self.mg.Draw("APL")
-    #self.cnv.BuildLegend(0.12, 0.12, 0.4, 0.5, "", "LP")
+    self.cnv.BuildLegend(0.03, 0.03, 0.4, 0.4, "", "LP")
     self.cnv.Update()
     self.cnv.Print("plots/roc.pdf")
 
