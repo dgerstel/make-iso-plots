@@ -28,18 +28,10 @@ root_file = "DVNtuple.root"
 
 # Group modes to categories; may be convenient, even if flat list of all modes
 # will be used.
-modes = [#('sig', ['Bs_mutau,pipipinu' , 'Bd_mutau,pipipinu']),
-         ('D(mu)3pi', ['Bd_Dst-3pi,munu', 'Bd_D-3pi,munu', 'Bd_D-3pi,Kmunu',
-                       'Bd_Dst-3pipi0,munu', 'Bs_Ds3pi,munu']),
-         ('D(3pi)mu', ['Bd_Dst-munu,3pipi0', 'Bd_D-munu,3pipi0',
-                       'Bd_Dststmunu,3pipi0', 'Bu_Dststmunu,3pipi0']),
-         ('D(3pi)tau(mu)', ['Bd_D-TauNu,3pipi0,munu',
-                            'Bd_Dst-TauNu,3pipi0,munu',
-                            'Bu_DststTauNu,3pipi0,munu']),
-         ('D(mu)tau(3pi)', ['Bd_D-TauNu,munu,3pinu',
-                            'Bu_DststTauNu,munu,3pinu']),
-         ('D(tau(3pi))mu', ['Bs_Dsmunu,TauNu'])
-        ]
+modes = [('Dstst', ['Bd_Dststmunu,3pipi0', 'Bu_Dststmunu,3pipi0', 'Bu_DststTauNu,3pipi0,munu', 'Bu_DststTauNu,munu,3pinu']),
+         ('other', ['Bd_Dst-3pi,munu',
+                       'Bd_D-3pi,munu', 'Bd_D-3pi,Kmunu', 'Bd_Dst-3pipi0,munu', 'Bs_Ds3pi,munu', 'Bd_Dst-munu,3pipi0', 'Bd_D-munu,3pipi0',
+                       'Bd_D-TauNu,3pipi0,munu', 'Bd_Dst-TauNu,3pipi0,munu', 'Bd_D-TauNu,munu,3pinu', 'Bs_Dsmunu,TauNu'])]
 modes = collections.OrderedDict(modes)
 
 # Get a flat list of all modes
@@ -166,6 +158,12 @@ leaves_alias = {sumPi_BDTiso3 : 'sumPi_BDTiso3',
                 min_bdtg_per_evt[0] : 'BDT_Dawid_1',
                 min_bdtg_per_evt[1] : 'BDT_Dawid_3'}
 
+def getLeafName(i):
+  """ Get alias if exists, otherwise full name """
+  if leaves_subset[i] in leaves_alias.keys():
+    return leaves_alias[leaves_subset[i]]
+  return leaves_subset[i]
+
 ######################################################################
 # CONTROLS
 ######################################################################
@@ -176,6 +174,11 @@ if WFH: OUTDIR = "./plots/"
 else: OUTDIR = "/lhcb/users/gerstel/LHCb_Analysis/DaVinciDev_v37r2p4/plots/"
 OUTFILE = OUTDIR + "old_iso_vars.pdf"
 
+# Apply preselection cuts (Joan's NOTE)
+#CUTS = ""
+CUTS = "(B_BDFplus_init_st==0)&&(B_BDFplus_status==0)&&(B_BDFplus_M>3500.)&&(B_BDFplus_M<7000.)"
+cut = "(Tau2Pi_SmallestDeltaChi2MassOneTrack-Tau2Pi_M<1000)"
+CUTS = '&&'.join([CUTS, cut])
 
 ######################################################################
 # Allocate histograms
@@ -266,11 +269,9 @@ class IsolationAnalyser(object):
     self.merge_backgrounds()
     self.plot_sig_and_bkg()
     self.make_ROCs()
+    self.draw_corr_B_mass()
 
   def make_raw_hists(self):
-    # xmax_l = [None, None, 8000., None, None, 0.1, 12000., None, None, None,
-    #           None, None, None]
-    # 30000, 1.5,
     # Open canvas and output file
     C = TCanvas()
     C.Print("plots/output.pdf[")
@@ -310,26 +311,27 @@ class IsolationAnalyser(object):
       res.Fill(bin_centre, sum(h.GetBinContent(i) for h in h_list))
     return res
 
-  def normalise(self, h):
+  def normalise(self, h, verbose=False):
     """ Including under/over flow """
-    print "*** Before normalise, under/over -flow: ", h.GetBinContent(0), \
-          h.GetBinContent(h.GetNbinsX()+1)
+    if verbose: print "*** Before normalise, under/over -flow: ", h.GetBinContent(0), \
+                h.GetBinContent(h.GetNbinsX()+1)
     norm = h.Integral(0, h.GetNbinsX()+1, "width")
-    print "Before normalising hist: ", h, " its norm: ", norm
+    if verbose: print "Before normalising hist: ", h, " its norm: ", norm
     h.Scale(1. / norm)
-    print "After... ", h.Integral("width")
-    print "*** After normalise, under/over -flow: ", h.GetBinContent(0), \
+    if verbose:
+      print "After... ", h.Integral("width")
+      print "*** After normalise, under/over -flow: ", h.GetBinContent(0), \
           h.GetBinContent(h.GetNbinsX()+1)
 
   def merge_signals(self):
     self.sig_merged = [self.add_hists(self.sig_h[:][i], label="sig_"+l, \
-                       title="Merged "+l) for i,l in enumerate(leaves_subset)]
+                       title="Merged "+getLeafName(i)) for i,l in enumerate(leaves_subset)]
     print "MERGED SIG: ", self.sig_merged
     for s in self.sig_merged: self.normalise(s)
 
   def merge_backgrounds(self):
     self.bkg_merged = [self.add_hists(self.bkg_h[:][i], label="bkg_"+l, \
-                       title="Merged "+l) for i,l in enumerate(leaves_subset)]
+                       title="Merged "+getLeafName(i)) for i,l in enumerate(leaves_subset)]
     print "MERGED BKG : ", self.bkg_merged
     for s in self.bkg_merged: self.normalise(s)
 
@@ -373,11 +375,9 @@ class IsolationAnalyser(object):
       #   rc.SetTitle("nominal")
       # else:
       #   rc.SetTitle(leaves_subset[i])
-      if leaves_subset[i] in leaves_alias.keys():
-        rc.SetTitle(leaves_alias[leaves_subset[i]])
-      else:  
-        rc.SetTitle(leaves_subset[i])
+      rc.SetTitle(getLeafName(i))
       self.mg.Add(rc)
+
     self.mg.GetXaxis()#.SetTitleSize(10)
     self.mg.GetYaxis()#.SetTitleSize(10)
     gStyle.SetLegendBorderSize(0)
@@ -401,6 +401,19 @@ class IsolationAnalyser(object):
     self.cnv.Update()
     self.cnv.Print("plots/roc.pdf")
 
+
+  def draw_corr_B_mass(self):
+    self.corr_B_mass_cnv = TCanvas()
+    self.corr_B_mass_cnv.Divide(6,4)
+
+    self.hist_B_mass_corr = [TH1F(m, m, 100, 2000, 20000) for m in mode_list]
+    gStyle.SetOptStat(111111)
+
+    for i,mode in enumerate(mode_list):
+      self.corr_B_mass_cnv.cd(i+1)
+      trees[i].Draw("B_BDFplus_M >> " + mode, CUTS)
+
+
   def plot_my_leave(self, leaf_id, ymax_all=None, xmax_all=None):
     self.canvases[leaf_id].Divide(6, 3)
     bdtg_label = []
@@ -414,7 +427,7 @@ class IsolationAnalyser(object):
       self.canvases[leaf_id].cd(mode_id + 1) #group_id+1)
       bdtg_label.append(get_hist_label(leaf_id, mode_id))
       draw_cmd = leaves_subset[leaf_id]+">>"+bdtg_label[-1]
-      trees[mode_id].Draw(draw_cmd, "", "goff")
+      trees[mode_id].Draw(draw_cmd, CUTS, "goff")
       htmp = gDirectory.Get(bdtg_label[-1])
 
       # Update minima/maxima
@@ -432,17 +445,16 @@ class IsolationAnalyser(object):
       # Define histogram
       label = mode+str(leaf_id)#leaves_subset[leaf_id]
       if xmax_all is not None:
-        self.hists[mode_id].append(TH1F(label, leaves_subset[leaf_id], 1000, -1.0, xmax_all))
+        self.hists[mode_id].append(TH1F(label, getLeafName(leaf_id), 1000, -1.0, xmax_all))
       else:
-        self.hists[mode_id].append(TH1F(label, leaves_subset[leaf_id], 1000, xmin_g, xmax_g))
+        self.hists[mode_id].append(TH1F(label, getLeafName(leaf_id), 1000, xmin_g, xmax_g))
       if ymax_all is not None:
         self.hists[mode_id].SetMaximum(ymax_all)
 
       # Draw histogram with legend
       self.canvases[leaf_id].cd(mode_id + 1)
       draw_cmd = leaves_subset[leaf_id]+">>"+label
-      cut = "Tau2Pi_SmallestDeltaChi2MassOneTrack-Tau2Pi_M<1000"
-      trees[mode_id].Draw(draw_cmd, cut, "HIST")
+      trees[mode_id].Draw(draw_cmd, CUTS, "HIST")
       # Normalise hist
       norm =    self.hists[mode_id][leaf_id].Integral("width")
       print "NORM = ", norm
