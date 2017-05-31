@@ -7,6 +7,7 @@ from os import listdir
 from os.path import join
 import ROOT
 import collections
+from array import array
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -206,6 +207,78 @@ def get_hist_label(j, i):
   """ Helper to uniquely name histograms """
   return "bdtg" + "j" + str(j) + "i" + str(i)
 
+#-------------------------------------------------------------
+#graph caracteristics
+def Gcharacteristics(g):
+  g.GetXaxis().SetNdivisions(9,5,0)
+  g.GetYaxis().SetNdivisions(9,5,0)
+  g.GetXaxis().SetLabelOffset(0.01)
+  g.GetYaxis().SetLabelOffset(0.01)
+  g.GetXaxis().SetTitleOffset(1.35)
+  g.GetYaxis().SetTitleOffset(1.35)
+  ROOT.gStyle.SetPadTickY(1)
+  g.SetLineWidth(3)
+#-------------------------------------------------------------
+
+#-------------------------------------------------------------
+#takes two histograms (signal and bkg) with SAME number of bins
+#and the Ttrees to make a ROC curve 
+#returns ROOT.TGraph (bkg rejection efficiency vs signal efficiency)
+#!! Uses the funtions 
+def ROCcurve(hsig, hbkg):#, Ttreesig, Ttreebkg):
+ print "ROCcurve: to the future and beyond"
+ print "Entries Signal=     ", hsig.Integral()#GetEntries()#, "Entries Signal Tree=     ", Ttreesig.GetEntries()
+ print "Entries Background= ", hbkg.Integral()#GetEntries()#, "Entries Background Tree= ", Ttreebkg.GetEntries()
+ nbins=hsig.GetSize()#-2 #as it returns +1+1 of under/overflow
+ i=0
+ FoM=[0] * nbins
+ vectmp=[0] * nbins
+ vectmpD=[0] * nbins
+ j=0
+ content=0
+ cbin=0
+ contentD=0
+ cbinD=0
+ #while (j<nbins):
+ # content = hsig.GetEntries()#Ttreesig.GetEntries()#content + hsig[k].GetBinContent(j)#
+ # contentD = hbkg.GetEntries()#Ttreebkg.GetEntries()#contentD + hsigD[k].GetBinContent(j)#
+ # j=j+1
+ content = hsig.Integral()#GetEntries() # If Entries are floats (because normalised), then GetEntries() gives # of bins rather than integral!
+ contentD = hbkg.Integral()#GetEntries()
+ def _fom(e_sig,e_bkg):
+  if e_bkg==0. and e_sig==0: return 0
+  if e_bkg==0: return -1.
+  return e_sig/e_bkg
+ sig_and_bkg_efficiencies = [(hsig.GetBinContent(i)/content,hbkg.GetBinContent(i)/contentD) for i in range(nbins)]
+ sig_and_bkg_efficiencies_w_fom = [ (s,b,_fom(s,b)) for (s,b) in sig_and_bkg_efficiencies]
+ print "s b eff w fom: ", sig_and_bkg_efficiencies_w_fom
+ max_fom = max([el[2] for el in sig_and_bkg_efficiencies_w_fom])
+ sig_and_bkg_efficiencies_w_fom = [(s,b,fom if fom>=0. else max_fom) for (s,b,fom) in sig_and_bkg_efficiencies_w_fom]
+ def _sort_sig_and_bkg_efficiencies(el1,el2): 
+  if el1[2]==el2[2]: return 0      
+  if el1[2]<el2[2]: return 1
+  if el1[2]>el2[2]: return -1
+ sig_and_bkg_efficiencies_w_fom.sort(_sort_sig_and_bkg_efficiencies)
+ sig_effiency = [s for (s,b,f) in sig_and_bkg_efficiencies_w_fom]
+ bkg_effiency = [b for (s,b,f) in sig_and_bkg_efficiencies_w_fom]
+ print "s eff sorted: ", sig_effiency
+ print "b eff sroted: ", bkg_effiency
+ vectmpFinal   = [   sum(sig_effiency[0:i]) for i in range(len(sig_effiency))]
+ vectmpDFinal  = [1.-sum(bkg_effiency[0:i]) for i in range(len(bkg_effiency))]
+ print "*** sig eff *** length: ", len(vectmpFinal), " els: ", vectmpFinal
+ print "*** bkg rej *** length: ", len(vectmpDFinal), " els: ", vectmpDFinal
+
+ #print vectmpFinal
+ #print vectmpDFinal
+ #Adding the uncertainties sqrt(eff*(1-eff)*N)
+ #vectmpFinal_delta   = [   0  for i in range(len(sig_effiency))]#[   sqrt(sum(sig_effiency[0:i])*(1-sum(sig_effiency[0:i]))*content)  for i in range(len(sig_effiency))]
+ #vectmpDFinal_delta  = [   0 for i in range(len(bkg_effiency))]#[   sqrt(sum(bkg_effiency[0:i])*(1-sum(bkg_effiency[0:i]))*contentD) for i in range(len(bkg_effiency))]
+ #gr=ROOT.TGraphErrors(len(array("d", vectmpDFinal)),array("d", vectmpFinal), array("d", vectmpDFinal), array("d", vectmpFinal_delta), array("d", vectmpDFinal_delta))
+ 
+ gr=ROOT.TGraphErrors(len(array("d", vectmpDFinal)),array("d", vectmpFinal), array("d", vectmpDFinal))
+ Gcharacteristics(gr)
+ return gr
+#-------------------------------------------------------------
 
 class ROC(object):
   """ Take sig and bkg TH1F histograms and compute their ROC curve
@@ -235,13 +308,21 @@ class ROC(object):
   def roc(self):
     """ Compute ROC curve, retrieve it inside class """
     # Include under/over -flow bins
-    xx = np.array([self.s_eff(i) for i in range(0, self.Nbins+2)])
-    yy = np.array([self.b_rej(i) for i in range(0, self.Nbins+2)])
-    #print "xx: ", xx, "\n\nyy: ", yy
-    self.roc_curve = TGraph(len(xx), xx, yy)
+    
+    self.roc_curve = ROCcurve(self.sig, self.bkg)
     self.roc_curve.Draw("AC*")
 #    self.roc_curve = (xx, yy)
     return self.roc_curve
+
+
+#     xx = np.array([self.s_eff(i) for i in range(0, self.Nbins+2)])
+#     yy = np.array([self.b_rej(i) for i in range(0, self.Nbins+2)])
+#     #print "xx: ", xx, "\n\nyy: ", yy
+#     self.roc_curve = TGraph(len(xx), xx, yy)
+#     self.roc_curve.Draw("AC*")
+# #    self.roc_curve = (xx, yy)
+#     return self.roc_curve
+
 
 
 class IsolationAnalyser(object):
@@ -435,9 +516,9 @@ class IsolationAnalyser(object):
       if xmin < xmin_g: xmin_g = xmin
       if xmax > xmax_g: xmax_g = xmax
 
-      print "xmax_all = ", xmax_all
+      #print "xmax_all = ", xmax_all
 
-    print "Leaf%d: xmin_g, xmax_g = %f, %f"%(leaf_id, xmin_g, xmax_g)
+    #print "Leaf%d: xmin_g, xmax_g = %f, %f"%(leaf_id, xmin_g, xmax_g)
     # Draw the leaves into the histograms
     # Their same binning and ranges help in making the ROC curve
     for mode_id, mode in enumerate(mode_list):
@@ -445,9 +526,9 @@ class IsolationAnalyser(object):
       # Define histogram
       label = mode+str(leaf_id)#leaves_subset[leaf_id]
       if xmax_all is not None:
-        self.hists[mode_id].append(TH1F(label, getLeafName(leaf_id), 1000, -1.0, xmax_all))
+        self.hists[mode_id].append(TH1F(label, getLeafName(leaf_id), 100, -1.0, xmax_all))
       else:
-        self.hists[mode_id].append(TH1F(label, getLeafName(leaf_id), 1000, xmin_g, xmax_g))
+        self.hists[mode_id].append(TH1F(label, getLeafName(leaf_id), 100, xmin_g, xmax_g))
       if ymax_all is not None:
         self.hists[mode_id].SetMaximum(ymax_all)
 
@@ -457,7 +538,7 @@ class IsolationAnalyser(object):
       trees[mode_id].Draw(draw_cmd, CUTS, "HIST")
       # Normalise hist
       norm =    self.hists[mode_id][leaf_id].Integral("width")
-      print "NORM = ", norm
+      #print "NORM = ", norm
       if norm:    # normalise non-empty hists
         self.hists[mode_id][leaf_id].Scale(1. / norm)
       else:
