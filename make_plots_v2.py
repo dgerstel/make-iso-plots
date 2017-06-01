@@ -40,7 +40,7 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 mode_list = [m for m in flatten(modes.values())]
 
 # Add new signal modes from Julien:
-mode_list += ["%s_mutau,pipipinu_tauola_babar_%s"%(part, vintage) for part in ['Bd', 'Bs'] for vintage in ['2011', '2012', '2011-12']]
+mode_list += ["%s_mutau,pipipinu_tauola_babar_%s"%(part, vintage) for part in ['Bd', 'Bs'] for vintage in ['2011-12']]
 print "MODES: ", mode_list
 
 
@@ -73,7 +73,7 @@ colours['Bd_Dststmunu,3pipi0']       = kOrange
 colours['Bs_Dsmunu,TauNu']           = kBlue
 colours['Bs_Ds3pi,munu']             = kBlack
 
-palette = [1,2,3,4,5,6,7,8,12,27,20,38,9]
+palette = [1,2,3,4,5,6,7,8,12,27,20,38,9, kViolet+1, kViolet+2, kRed+1, kRed+2]
 #palette = [kBlack, kRed, kBlue, kOrange, kViolet]
 
 # Allocate TFiles and TTrees
@@ -110,7 +110,10 @@ important_old_leaves = ['B_SmallestDeltaChi2OneTrack'
                         ,'Mu_isolation_Giampi_nopi'
                         ,'Mu_BDTiso3'
                         ,'Tau2Pi_SmallestDeltaChi2OneTrack'
-                        ,'Tau2Pi_BDTiso3']
+                        ,'Tau2Pi_BDTiso3']#,
+                        #  'B_0_50_cc_mult',
+                        # 'B_0_50_nc_sPT']
+important_old_leaves += ["%s_0.50_nc_%s"%(part, suff) for part in ['B', 'Mu', 'Tau2Pi'] for suff in ['mult']]#, 'sPT', 'vPT', 'PX', 'PV', 'PZ']]
 
 # Ranges of hists
 leaves_ranges = {'B_SmallestDeltaChi2OneTrack'      : (None, 3000), # there are events in range 3000-8000
@@ -119,6 +122,7 @@ leaves_ranges = {'B_SmallestDeltaChi2OneTrack'      : (None, 3000), # there are 
                  'Mu_BDTiso3'                       : (-1.0, 0.01),
                  'Tau2Pi_SmallestDeltaChi2OneTrack' : (None, 1500),
                  'Tau2Pi_BDTiso3'                   : (-1.5, 0.01)}
+
 
 # roughly best cppm's variables
 #nominal = ['Tau2Pi_BDTiso3']
@@ -171,6 +175,12 @@ def getLeafName(i):
 leaves_subset = min_bdtg_per_evt + important_old_leaves + new #not_my_leaves[:2] #min_bdtg_per_evt
 #leaves_subset = [leaves_subset[i] for i in [0,1,2,8]]
 
+# If not explicitly stated -- leave range (None, None)
+for l in leaves_subset:
+  if l not in leaves_ranges.keys():
+    leaves_ranges[l] = (None, None)
+
+
 if WFH: OUTDIR = "./plots/"
 else: OUTDIR = "/lhcb/users/gerstel/LHCb_Analysis/DaVinciDev_v37r2p4/plots/"
 OUTFILE = OUTDIR + "old_iso_vars.pdf"
@@ -181,6 +191,11 @@ CUTS = "(B_BDFplus_init_st==0)&&(B_BDFplus_status==0)&&(B_BDFplus_M>3500.)&&(B_B
 cut = "(Tau2Pi_SmallestDeltaChi2MassOneTrack-Tau2Pi_M<1000)"
 CUTS = '&&'.join([CUTS, cut])
 
+# Background selection:
+# - w/ D**
+# - w/out D**
+# - with pi0
+BKG = "Pi0" #"Dstst" # "!Dstst" #"Pi0"
 ######################################################################
 # Allocate histograms
 ######################################################################
@@ -251,7 +266,7 @@ def ROCcurve(hsig, hbkg):#, Ttreesig, Ttreebkg):
   return e_sig/e_bkg
  sig_and_bkg_efficiencies = [(hsig.GetBinContent(i)/content,hbkg.GetBinContent(i)/contentD) for i in range(nbins)]
  sig_and_bkg_efficiencies_w_fom = [ (s,b,_fom(s,b)) for (s,b) in sig_and_bkg_efficiencies]
- print "s b eff w fom: ", sig_and_bkg_efficiencies_w_fom
+ #print "s b eff w fom: ", sig_and_bkg_efficiencies_w_fom
  max_fom = max([el[2] for el in sig_and_bkg_efficiencies_w_fom])
  sig_and_bkg_efficiencies_w_fom = [(s,b,fom if fom>=0. else max_fom) for (s,b,fom) in sig_and_bkg_efficiencies_w_fom]
  def _sort_sig_and_bkg_efficiencies(el1,el2): 
@@ -261,12 +276,12 @@ def ROCcurve(hsig, hbkg):#, Ttreesig, Ttreebkg):
  sig_and_bkg_efficiencies_w_fom.sort(_sort_sig_and_bkg_efficiencies)
  sig_effiency = [s for (s,b,f) in sig_and_bkg_efficiencies_w_fom]
  bkg_effiency = [b for (s,b,f) in sig_and_bkg_efficiencies_w_fom]
- print "s eff sorted: ", sig_effiency
- print "b eff sroted: ", bkg_effiency
+ # print "s eff sorted: ", sig_effiency
+ # print "b eff sroted: ", bkg_effiency
  vectmpFinal   = [   sum(sig_effiency[0:i]) for i in range(len(sig_effiency))]
  vectmpDFinal  = [1.-sum(bkg_effiency[0:i]) for i in range(len(bkg_effiency))]
- print "*** sig eff *** length: ", len(vectmpFinal), " els: ", vectmpFinal
- print "*** bkg rej *** length: ", len(vectmpDFinal), " els: ", vectmpDFinal
+ # print "*** sig eff *** length: ", len(vectmpFinal), " els: ", vectmpFinal
+ # print "*** bkg rej *** length: ", len(vectmpDFinal), " els: ", vectmpDFinal
 
  #print vectmpFinal
  #print vectmpDFinal
@@ -360,6 +375,7 @@ class IsolationAnalyser(object):
     self.canvases = [TCanvas() for l in leaves_subset]
 
     for i,l in enumerate(leaves_subset):
+      #print "Leaf: ", l
       self.plot_my_leave(leaf_id=i, ymax_all=None, xmax_all=leaves_ranges[l][1])
 
     # Close the output file
@@ -368,17 +384,41 @@ class IsolationAnalyser(object):
 
   def select_sig(self):
     self.sig_h = [[self.hists[i][j] for i in range(len(mode_list)) \
-                   if "Bs_mutau,pipipinu" in self.hists[i][j].GetName() or \
-                   "Bd_mutau,pipipinu" in self.hists[i][j].GetName()] for j in \
+                   if "Bs_mutau,pipipinu" in self.hists[i][j].GetTitle() or \
+                   "Bd_mutau,pipipinu" in self.hists[i][j].GetTitle()] for j in \
                    range(len(leaves_subset))]
-    print "sig hists: ", self.sig_h
+    #print "sig hists: ", self.sig_h
 
 
   def select_bkg(self):
-    self.bkg_h = [[self.hists[i][j] for i in range(len(mode_list)) \
-                     if "Dstst" in self.hists[i][j].GetName()] for j in \
+    def select_bkg_Dstst():
+      self.bkg_h = [[self.hists[i][j] for i in range(len(mode_list)) \
+                     if "Dstst" in self.hists[i][j].GetTitle()] for j in \
                      range(len(leaves_subset))]
-    print "\nbkg hists: ", self.bkg_h
+      print "\nD** bkg hists: ", self.bkg_h
+
+    def select_bkg_NonDstst():
+      self.bkg_h = [[self.hists[i][j] for i in range(len(mode_list)) \
+                     if not "Dstst" in self.hists[i][j].GetTitle() and \
+                     not "Bs_mutau,pipipinu" in self.hists[i][j].GetTitle() and \
+                     not "Bd_mutau,pipipinu" in self.hists[i][j].GetTitle()] for j in \
+                     range(len(leaves_subset))]
+      print "\nnonD** bkg hists: ", self.bkg_h
+
+    def select_bkg_Pi0():
+      pi0_bkg = ['Bd_Dst-3pi,munu', 'Bd_Dst-munu,3pipi0', 'Bd_D-munu,3pipi0', 'Bu_DststTauNu,munu,3pinu',
+                 'Bu_Dststmunu,3pipi0', 'Bu_DststTauNu,3pipi0,munu', 'Bd_Dststmunu,3pipi0', 'Bd_Dst-3pipi0,munu',
+                 'Bd_D-TauNu,3pipi0,munu', 'Bd_Dst-TauNu,3pipi0,munu']
+      self.bkg_h = [[self.hists[i][j] for i in range(len(mode_list)) \
+                       if self.hists[i][j].GetTitle() in pi0_bkg]
+                       for j in range(len(leaves_subset))]
+      print "\npi0 bkg: ", self.bkg_h
+
+    selection = { "Dstst" : select_bkg_Dstst,
+                  "!Dstst" : select_bkg_NonDstst,
+                  "Pi0" : select_bkg_Pi0}
+    # Select chosen BKG type
+    selection[BKG]()
 
 
   def add_hists(self, h_list, label, title):
@@ -411,12 +451,13 @@ class IsolationAnalyser(object):
     for s in self.sig_merged: self.normalise(s)
 
   def merge_backgrounds(self):
-    self.bkg_merged = [self.add_hists(self.bkg_h[:][i], label="bkg_"+l, \
-                       title="Merged "+getLeafName(i)) for i,l in enumerate(leaves_subset)]
+    self.bkg_merged = [self.add_hists(self.bkg_h[:][i], label=BKG+l, \
+                       title="Merged "+BKG+getLeafName(i)) for i,l in enumerate(leaves_subset)]
     print "MERGED BKG : ", self.bkg_merged
     for s in self.bkg_merged: self.normalise(s)
 
   def plot_sig_and_bkg(self):
+    gStyle.SetOptStat(111111)
     C = TCanvas()
     C.Print("plots/sig_and_bkg.pdf[")
     for i in range(len(leaves_subset)):
@@ -487,16 +528,18 @@ class IsolationAnalyser(object):
     self.corr_B_mass_cnv = TCanvas()
     self.corr_B_mass_cnv.Divide(6,4)
 
-    self.hist_B_mass_corr = [TH1F(m, m, 100, 2000, 20000) for m in mode_list]
+    self.hist_B_mass_corr = [TH1F(m, m, 100, 3500, 7000) for m in mode_list]
     gStyle.SetOptStat(111111)
 
     for i,mode in enumerate(mode_list):
       self.corr_B_mass_cnv.cd(i+1)
       trees[i].Draw("B_BDFplus_M >> " + mode, CUTS)
+    self.corr_B_mass_cnv.Print("plots/B_mass.pdf")
 
 
   def plot_my_leave(self, leaf_id, ymax_all=None, xmax_all=None):
-    self.canvases[leaf_id].Divide(6, 3)
+    gStyle.SetOptStat(111111)
+    self.canvases[leaf_id].Divide(6, 4)
     bdtg_label = []
     legs = [TLegend(0.2,0.5,0.6,0.9) for m in mode_list]
 
@@ -504,6 +547,7 @@ class IsolationAnalyser(object):
     xmin_g, xmax_g = (0, 0)
     mode_id = -1
     for mode in mode_list:
+      #print "--Mode: ", mode
       mode_id += 1
       self.canvases[leaf_id].cd(mode_id + 1) #group_id+1)
       bdtg_label.append(get_hist_label(leaf_id, mode_id))
@@ -526,9 +570,9 @@ class IsolationAnalyser(object):
       # Define histogram
       label = mode+str(leaf_id)#leaves_subset[leaf_id]
       if xmax_all is not None:
-        self.hists[mode_id].append(TH1F(label, getLeafName(leaf_id), 100, -1.0, xmax_all))
+        self.hists[mode_id].append(TH1F(label, "%s;%s;"%(mode, getLeafName(leaf_id)), 50, -1.0, xmax_all))
       else:
-        self.hists[mode_id].append(TH1F(label, getLeafName(leaf_id), 100, xmin_g, xmax_g))
+        self.hists[mode_id].append(TH1F(label, "%s;%s;"%(mode, getLeafName(leaf_id)), 50, xmin_g, xmax_g))
       if ymax_all is not None:
         self.hists[mode_id].SetMaximum(ymax_all)
 
